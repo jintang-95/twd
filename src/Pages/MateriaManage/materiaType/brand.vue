@@ -1,0 +1,571 @@
+<template>
+  <div class="materiaType">
+    <right-container
+      @selectType="selectType"
+      @pageSizeToggle="pageSizeToggle"
+      @pageToggle="pageToggle"
+      @pagePrev="pagePrev"
+      @pageNext="pageNext"
+      @statusChange="statusChange"
+      @inputChange="inputChange"
+      @refreshPage="refreshPage"
+      @addNew="addNew"
+      :page="page"
+      :pageSize="pageSize"
+      :total="total"
+      :checkList="checkList"
+      :process="process"
+      :menuList="treeData"
+      :showTree="false"
+      title="全部分类"
+    >
+      <el-table
+        :data="tableData"
+        stripe
+        header-row-class-name="headerClass"
+        slot="table"
+        align="center"
+        cell-class-name="elliplise"
+      >
+        <el-table-column
+          align="center"
+          v-for="(item, index) in columns"
+          :width="item.width"
+          :prop="item.prop"
+          :label="item.label"
+          :key="index"
+        ></el-table-column>
+        <el-table-column label="状态" align="center" class-name="status-col" width="100">
+          <template slot-scope="{row}">
+            <div class="success" v-if="row.Status=='启用'">
+              <img src="../../../assets/images/img/green.png" alt /> 已启用
+            </div>
+            <div class="danger" v-if="row.Status=='停用'">
+              <img src="../../../assets/images/img/red.png" alt /> 已停用
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          align="center"
+          width="300"
+          class-name="small-padding fixed-width"
+        >
+          <template slot-scope="{row}">
+            <!-- v-if="row.Status!='启用'" -->
+            <el-button type="text" class="operationTtn" size="small" @click="edit(row)">
+              <img src="../../../assets/images/edit_icon.png" alt />
+              <span>编辑</span>
+            </el-button>
+            <el-button
+              v-if="row.Status =='停用'"
+              size="small"
+              type="text"
+              class="operationTtn"
+              @click="start(row)"
+            >
+              <img src="../../../assets/images/start_icon.png" alt />
+              <span>启用</span>
+            </el-button>
+            <el-button
+              v-if="row.Status=='启用'"
+              size="small"
+              class="operationTtn"
+              type="text"
+              @click="stop(row)"
+            >
+              <img src="../../../assets/images/stop_icon.png" alt />
+              <span>停用</span>
+            </el-button>
+            <el-button
+              v-if="row.Status=='停用'||row.Status=='0'"
+              size="small"
+              type="text"
+              class="operationTtn"
+              @click="del(row)"
+            >
+              <img src="../../../assets/images/del_icon.png" alt />
+              <span>删除</span>
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </right-container>
+    <Dialog
+      :visible="showMask"
+      :typeList="typeList"
+      :type="formType"
+      :formData="formData"
+      @closeMask="closeMask"
+      @addMateria="addMateria"
+    ></Dialog>
+  </div>
+</template>
+
+<script>
+import test from '@/components/equipmentTable'
+import RightContainer from "@/components/rightContainer.vue";
+import Dialog from "./dialog/dialogBrand.vue";
+import { treeToArray } from "@/util/util.js";
+import { mapGetters } from "vuex";
+export default {
+  name: "brand", //品牌分类
+  data() {
+    return {
+      showReplace:false,
+      pageSize: 10,
+      page: 1,
+      currentId: 0,
+      total: 0,
+      showMask: false,
+      typeList: [],
+      formData: {
+        No: "",
+        Name: "",
+        ParentId: "",
+        Desc: "",
+        AutoCode: "",
+        UnitConvert: "",
+        OperationStandard: "",
+        MaterielBOM: "",
+      },
+      typeNewList:[],
+      materielTable:[],
+      formType: "1",
+      process: ["Add", "check", "search"],
+      checkData: "",
+      lastData: [],
+      keyWord: "",
+      tableData: [],
+      checkList: [
+        {
+          title: "全部",
+          statu: "",
+        },
+        {
+          title: "已启用",
+          statu: 2,
+        },
+        {
+          title: "已停用",
+          statu: 3,
+        },
+      ],
+      treeData: [],
+      columns: [
+        // {
+        //   label: "分类编码",
+        //   prop: "No",
+        // },
+        {
+          label: "品牌",
+          prop: "Name",
+        },
+        // {
+        //   label: "创建人",
+        //   prop: "CreatedUser",
+        //   width: "100",
+        // },
+        {
+          label: "创建时间",
+          prop: "CreatedTime",
+        },
+        // {
+        //   label: "单位换算",
+        //   prop: "UnitConvert",
+        // },
+        // {
+        //   label: "作业标准",
+        //   prop: "OperationStandard",
+        // },
+        // {
+        //   label: "BOM",
+        //   prop: "MaterielBOM",
+        // },
+        // {
+        //   label: "描述",
+        //   prop: "Desc",
+        //   width: "300",
+        // },
+      ],
+    };
+  },
+  async created() {
+    await this.getTreeData();
+    this.getTableData();
+  },
+  computed: {
+    ...mapGetters([
+      "GetMaterielCategoryTree",
+      "GetMaterielCategorys",
+      "UnCancelMaterielCategory",
+      "CancelMaterielCategory",
+      "RemoveMaterielCategory",
+      "SaveMaterielCategory",
+      "GetMaterielCategoryById",
+      "GetBrands",
+      "SaveBrand",
+      "RemoveBrand",
+      "CancelBrand",
+      "GetBrandById",
+      "UnCancelBrand",
+      "DeviceInfoGetList",
+    ]),
+  },
+  watch: {
+    DeviceInfoGetList(newVal,oldVal){
+      this.typeNewList=newVal.ReturnData.Data
+      console.log(this.typeNewList)
+    },
+    GetMaterielCategoryTree(newValue, oldValue) {
+      if (newValue.Code === 0) {
+        this.treeData = newValue.ReturnData;
+        this.lastData = newValue.ReturnData;
+      } else {
+        // 失败
+      }
+    },
+    GetBrands(newValue, oldValue) {
+      if (newValue.Code === 0) {
+        for (let i = 0; i < newValue.ReturnData.Data.length; i++) {
+          newValue.ReturnData.Data[i].Status =
+            newValue.ReturnData.Data[i].Status == 2 ? "启用" : "停用";
+          newValue.ReturnData.Data[i].AutoCode =
+            newValue.ReturnData.Data[i].AutoCode == 1 ? "是" : "否";
+          newValue.ReturnData.Data[i].UnitConvert =
+            newValue.ReturnData.Data[i].UnitConvert == 1 ? "是" : "否";
+          newValue.ReturnData.Data[i].OperationStandard =
+            newValue.ReturnData.Data[i].OperationStandard == 1 ? "是" : "否";
+          newValue.ReturnData.Data[i].MaterielBOM =
+            newValue.ReturnData.Data[i].MaterielBOM == 1 ? "是" : "否";
+        }
+        this.tableData = newValue.ReturnData.Data;
+        this.total = newValue.ReturnData.DataCount;
+      } else {
+        // 失败
+      }
+    },
+    UnCancelBrand(newValue, oldValue) {
+      console.log(newValue);
+      if (newValue.Code === 0) {
+        this.$message({
+          showClose: true,
+          message: "启用成功",
+          type: "success",
+        });
+        this.getTableData();
+      } else {
+        // 失败
+        this.$message({
+          showClose: true,
+          message: "启用失败",
+          type: "fail",
+        });
+      }
+    },
+    CancelBrand(newValue, oldValue) {
+      if (newValue.Code === 0) {
+        this.$message({
+          showClose: true,
+          message: "停用成功",
+          type: "success",
+        });
+        this.getTableData();
+      } else {
+        // 失败
+        this.$message({
+          showClose: true,
+          message: "停用失败",
+          type: "fail",
+        });
+      }
+    },
+    async RemoveBrand(newValue, oldValue) {
+      if (newValue.Code === 0) {
+        this.$message({
+          showClose: true,
+          message: newValue.Message,
+          type: "success",
+        });
+        await this.getTableData();
+        this.getTreeData();
+      } else {
+        // 失败
+        this.$message({
+          showClose: true,
+          message: newValue.Message,
+          type: "fail",
+        });
+      }
+    },
+    
+    },
+    GetBrandById(newValue, oldValue) {
+      if (newValue.Code === 0) {
+      } else {
+        // 失败
+      }
+    },
+  methods: {
+    //===============测试======================
+    // @closePropMask="closePropMask"
+    //   @dataSubmit="dataSubmit"
+    //   @PopFormInit01="PopFormInit01"
+    //   @AddMateriels="AddMateriels"
+    //   @addMaterielTable="addTable"
+    //   @addCheck="addCheck"
+    // closePropMask(val){
+    //   console.log(val)
+    // },
+    // dataSubmit(val){
+    //   console.log(val)
+    // },
+    // AddMateriels(val){
+    //   console.log(val)
+    // },
+    // PopFormInit01(val){
+    //   console.log(val)
+    // },
+    // addTable(val){
+    //   console.log(val)
+    // },
+    // addCheck(val){
+    //   console.log(val)
+    // },
+    // checkTable() {
+    //   this.showReplace=true
+    // },
+    // gettest() {
+    //   let json = {
+    //     MN: "DeviceInfoGetList",
+    //     SN: "DeviceManage",
+    //     DataContent: {
+    //       TypeId: 0,
+    //       KeyWord: "",
+    //       PageSize: 10,
+    //       PageIndex: 1,
+    //       IsDel: -1,
+    //     },
+    //   };
+    //   this.MIX_send(json);
+    // },
+    // //===============测试结束==================
+    selectType(data) {
+      this.currentId = data;
+      this.treeData = [];
+      this.treeData = this.lastData;
+      this.getTableData();
+    },
+    // 获取树形结构数据
+    getTreeData() {
+      let json = {
+        MN: "GetMaterielCategoryTree",
+        SN: "Materiel",
+        DataContent: {
+          SType: 4,
+        },
+      };
+      this.MIX_send(json);
+    },
+    // 获取表格数据
+    getTableData() {
+      let json = {
+        MN: "GetBrands",
+        SN: "Materiel",
+        DataContent: {
+          Status: this.checkData,
+          KeyWord: this.keyWord,
+          PageSize: this.pageSize,
+          PageIndex: this.page,
+        },
+      };
+      this.MIX_send(json);
+    },
+    // 停用
+    stopMateria(id) {
+      let json = {
+        MN: "CancelBrand",
+        SN: "Materiel",
+        DataContent: {
+          Ids: id,
+        },
+      };
+      this.MIX_send(json);
+    },
+    // 启用
+    startMateria(id) {
+      let json = {
+        MN: "UnCancelBrand",
+        SN: "Materiel",
+        DataContent: {
+          Ids: id,
+        },
+      };
+      this.MIX_send(json);
+    },
+    // 删除
+    removeMateria(id) {
+      let json = {
+        MN: "RemoveBrand",
+        SN: "Materiel",
+        DataContent: {
+          Ids: id,
+        },
+      };
+      this.MIX_send(json);
+    },
+    // 新增分类
+    
+    // 页面Size切换
+    pageSizeToggle(data) {
+      this.pageSize = pageSize;
+      this.getTableData();
+    },
+    // 页面切换
+    pageToggle(data) {
+      this.page = data;
+      this.getTableData();
+    },
+    // 上一页回调
+    pagePrev(data) {
+      this.page = data;
+      this.getTableData();
+    },
+    // 下一页回调
+    pageNext(data) {
+      this.page = data;
+      this.getTableData();
+    },
+    // 顶部复选框过滤
+    statusChange(data) {
+      this.checkData = data;
+      this.getTableData();
+    },
+    // 输入框回车键
+    inputChange(data) {
+      console.log(data);
+      this.keyWord = data;
+      this.getTableData();
+    },
+    // 刷新回调
+    async refreshPage() {
+      await this.getTreeData();
+      this.getTableData();
+    },
+    /**
+     * 表格处理函数
+     * */
+    // 编辑
+    edit(row) {
+      this.formType = "2";
+      this.formData = {
+        No: row.No,
+        Name: row.Name,
+        ParentId: row.ParentId,
+        Desc: row.Desc,
+        AutoCode: row.AutoCode == "是",
+        UnitConvert: row.UnitConvert == "是",
+        OperationStandard: row.OperationStandard == "是",
+        MaterielBOM: row.MaterielBOM == "是",
+        Id: row.Id,
+        SType: 4,
+      };
+      this.showMask = true;
+    },
+    // 停用
+    stop(row) {
+      this.stopMateria(row.Id);
+    },
+    // 删除
+    del(row) {
+      this.removeMateria(row.Id);
+    },
+    // 回收
+    reCover(row) {},
+    // 启用
+    start(row) {
+      this.startMateria(row.Id);
+    },
+    //下拉框选择id
+    GetTableId(val) {
+      console.log(val.val.length - 1);
+      this.form.ParentId = val[val.length - 1];
+    },
+    // 清除
+    clear(row) {},
+    // 新增
+    addNew() {
+      this.formType = "1";
+      for (let key in this.formData) {
+        if (key != "Id") {
+          this.formData[key] = "";
+        } else {
+          delete this.formData[key];
+        }
+      }
+      this.showMask = true;
+    },
+    // 取消新增或者取消编辑
+    closeMask(data) {
+      this.showMask = false;
+    },
+    // 新增或者编辑成功后刷新
+    addMateria(data) {
+      this.getTableData();
+      this.getTreeData();
+      this.showMask = false;
+    },
+  },
+  components: {
+    RightContainer,
+    Dialog,
+    test
+  },
+};
+</script>
+
+<style scoped lang="less">
+.processBtn {
+  display: flex;
+}
+
+.name {
+  font-size: 16px;
+  font-family: PingFangSC-Medium, PingFang SC;
+  font-weight: bold;
+  color: rgba(77, 100, 116, 1);
+}
+.operationTtn span {
+  color: #0060a0;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.operationTtn img {
+  width: 14px;
+  vertical-align: middle;
+}
+.success {
+  color: #8cd16b;
+}
+.danger {
+  color: #f56262;
+}
+/deep/ .el-tag {
+  border: none;
+}
+.materiaType {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border-radius: 5px;
+  padding: 0 1.1875rem;
+  border: 1px solid rgba(225, 255, 225, 0.1);
+  // padding: 0 5%;
+  box-sizing: border-box;
+}
+// .right-container{
+//   width: 98% ;
+// }
+</style>
